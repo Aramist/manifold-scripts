@@ -1,0 +1,15 @@
+[project]
+name = "manifold-scripts"
+version = "0.0.1"
+description = "Scripts for analyzing and visualizing manifolds of embeddings of audio clips."
+readme = "README.md"
+authors = [
+    { name = "Aramis Tanelus", email = "aramis.tanelus@nyu.edu" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "audiomanifolds",
+]
+
+[tool.uv.sources]
+audiomanifolds = { git = "https://github.com/aramist/audio-embeddings" }
