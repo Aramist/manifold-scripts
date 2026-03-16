@@ -1,6 +1,6 @@
 from pathlib import Path
 
-parent_dir = Path("/scratch/at4219/")
+parent_dir = Path("/scratch/at4219/computed_embeddings")
 files = [
     "BSD10k_CLAP_gain.h5",
     "BSD10k_CLAP_gain_narrow_config.h5",
@@ -67,5 +67,5 @@ def squeeze_h5_files_in_directory(directory: Path):
             h5_file.unlink()  # file si corrupted, delete it
 
 
-target_dir = Path("/scratch/at4219")
-squeeze_h5_files_in_directory(target_dir)
+target_dir = Path("/scratch/at4219/computed_embeddings")
+# squeeze_h5_files_in_directory(target_dir)

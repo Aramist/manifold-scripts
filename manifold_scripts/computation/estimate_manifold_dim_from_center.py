@@ -72,15 +72,23 @@ output_path = (
 if output_path.exists():
     try:
         # If all of this works, we can exit without wasting compute
-        print(f"Output file {output_path} already exists. Loading and exiting.")
+        print(f"Output file {output_path} already exists. Checking if it's valid...")
         loaded = np.load(output_path)
         id_chart = loaded["id_chart"]
-        perturb_magnitudes = loaded["perturbation_strength"]
-        dists_from_center = loaded["dists_from_center"]
-        print("Loaded intrinsic dimensionality chart shape: ", id_chart.shape)
-        print()
-        print()
-        exit(0)
+        zero_rows = (np.abs(id_chart) < 1e-4).all(axis=1)
+        if zero_rows.any():
+            print(
+                f"Warning: Found {zero_rows.sum()} rows in the intrinsic dimensionality chart that are all zeros. This might indicate a problem with the estimation. Please check the output file {output_path}."
+            )
+        if zero_rows.sum() > 5:
+            print(
+                f"Error: Found {zero_rows.sum()} rows in the intrinsic dimensionality chart that are all zeros. Re-running estimation..."
+            )
+        else:
+            print("Loaded intrinsic dimensionality chart shape: ", id_chart.shape)
+            print()
+            print()
+            exit()
     except:
         pass
 

@@ -1,5 +1,5 @@
 [project]
-name = "manifold-scripts"
+name = "manifold_scripts"
 version = "0.0.1"
 description = "Scripts for analyzing and visualizing manifolds of embeddings of audio clips."
 readme = "README.md"
@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "audiomanifolds",
+    "seaborn>=0.13.2",
 ]
 
 [tool.uv.sources]
