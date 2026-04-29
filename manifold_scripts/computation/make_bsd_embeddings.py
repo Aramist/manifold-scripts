@@ -12,10 +12,9 @@ import numpy as np
 import pandas as pd
 import soundfile as sf
 import torch
+from audiomanifolds import embeddings, transformations
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-
-from audiomanifolds import embeddings, transformations
 
 args_for_augs = {
     "gain": {"gains": np.linspace(-10, 10, 101, endpoint=True)},
@@ -30,9 +29,9 @@ args_for_augs = {
     },
     "pitch_shifting": {"n_steps": np.linspace(-12, 12, 101, endpoint=True)},
     "low_pass_filter": {
-        "cutoff_frequencies": np.linspace(1000, 16000, 101, endpoint=True)[
-            ::-1
-        ]  # Reversed so the less-impactful augmentations come first
+        "cutoff_freqs": np.insert(
+            np.geomspace(100, 15000, 100, endpoint=True)[::-1], 0, np.nan
+        )  # Nan acts as a no-op here
     },
 }
 
@@ -46,6 +45,7 @@ module_lookup = {
 model_lookup = {
     "PANN": embeddings.PannEmbedder,
     "CLAP": embeddings.CLAPAudioEmbedder,
+    "encodec": embeddings.EncodecEmbedder,
 }
 
 static_file: h5py.File | None = None
@@ -214,32 +214,33 @@ def run(
         audio_paths,
         target_sr=sr,
         clip_length=clip_length,
-        augmentation=augment_module,
+        augmentation=None,
         start_idx=start_idx,
     )
-    try:
-        num_avail_cpu = len(os.sched_getaffinity(0))
-    except AttributeError:
-        num_avail_cpu = os.cpu_count() or 1
-    num_workers = max(1, num_avail_cpu - 2)
-    dloader = DataLoader(
-        dset,
-        batch_size=1,
-        shuffle=False,
-        num_workers=num_workers,
-    )
+    dloader = DataLoader(dset, batch_size=1, shuffle=False, num_workers=0)
 
     with h5py.File(save_to, "a") as hf:
         global static_file
         static_file = hf  # For signal handler access
+
+        audio_ids = [int(p.stem) for p in audio_paths]
+        if "sound_id" not in hf:
+            hf.create_dataset("sound_id", data=np.array(audio_ids), dtype=np.int32)
+            for key, value in kwargs.items():
+                hf.create_dataset(
+                    f"args/{key}", data=np.array(value)
+                )  # Store which augmentation params were used
+
         try:
             for n, data in tqdm(
                 enumerate(iter(dloader), start=start_idx),
                 total=len(dloader),
                 desc="Processing audio files",
             ):
-                augmented_audio, sr = data
+                audio, sr = data
+                audio = audio.squeeze(1)  # Remove channel dimension since audio is mono
                 with torch.no_grad():
+                    augmented_audio, sr = augment_module((audio, sr))
                     if torch.cuda.is_available():
                         augmented_audio = augmented_audio.cuda()
                     # augmented_audio shape: num_augs, clip_len
@@ -259,13 +260,6 @@ def run(
                 )
         except KeyboardInterrupt:
             return
-        audio_ids = [int(p.stem) for p in audio_paths]
-        if "sound_id" not in hf:
-            hf.create_dataset("sound_id", data=np.array(audio_ids), dtype=np.int32)
-            for key, value in kwargs.items():
-                hf.create_dataset(
-                    f"args/{key}", data=np.array(value)
-                )  # Store which augmentation params were used
 
 
 if __name__ == "__main__":
@@ -303,7 +297,7 @@ if __name__ == "__main__":
         cfg_name = args.config.stem
     BSD_AUDIO_PATH = Path("/ext3/BSD10k_audio/")
     BSD_METADATA_PATH = Path("/ext3/bsd_id_to_class_mapping.csv")
-    output_dir = Path("/scratch/at4219/")
+    output_dir = Path("/scratch/at4219/computed_embeddings/")
 
     print(f"Using CUDA: {torch.cuda.is_available()}")
     # get lengths of all audio files to filter for longer clips

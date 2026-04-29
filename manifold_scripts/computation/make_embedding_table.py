@@ -9,10 +9,9 @@ import numpy as np
 import scipy.linalg
 import soundfile as sf
 import torch
+from audiomanifolds import embeddings, transformations
 from sklearn.decomposition import PCA
 from tqdm import tqdm
-
-from audiomanifolds import embeddings, transformations
 
 args_for_augs = {
     "gain": {"gains": np.linspace(-10, 10, 101, endpoint=True)},
@@ -26,12 +25,18 @@ args_for_augs = {
         )
     },
     "pitch_shifting": {"n_steps": np.linspace(-12, 12, 101, endpoint=True)},
+    "low_pass_filter": {
+        "cutoff_freqs": np.insert(
+            np.geomspace(100, 16000, 100, endpoint=True)[::-1], 0, np.nan
+        )  # Nan acts as a no-op here
+    },
 }
 
 module_lookup = {
     "gain": transformations.Gain,
     "time_stretching": transformations.TimeStretching,
     "pitch_shifting": transformations.PitchShifting,
+    "low_pass_filter": transformations.LowPassFilter,
 }
 
 

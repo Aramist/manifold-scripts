@@ -13,11 +13,14 @@ from ..consts import (
     convert_numpy_to_list,
     embedding_dir,
     gev_embedding_dir,
+    noop_index,
 )
 
 
 def compute_gev(
-    embedding_path: Path, class_ids_to_include: tp.Optional[tp.List[int]] = None
+    embedding_path: Path,
+    augmentation_name: str,
+    class_ids_to_include: tp.Optional[tp.List[int]] = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Computes the set of vectors which solve the generalized eigenvector problem maximizing
     x'Bx/x'Ax for the within-class scatter matrix B and across class scatter matrix A
@@ -52,7 +55,8 @@ def compute_gev(
     for i, emb_slice in enumerate(tqdm(emb)):
         emb[i] = emb_slice - global_mean.astype(np.float32)
     emb_centered = emb
-    orig_audio_emb = emb_centered[:, num_augs // 2, :].astype(
+    center_idx = noop_index[augmentation_name]
+    orig_audio_emb = emb_centered[:, center_idx, :].astype(
         np.float64
     )  # (num_classes, embedding_dim)
 
@@ -104,8 +108,8 @@ def compute_gev(
 
 if __name__ == "__main__":
     gev_embedding_dir.mkdir(exist_ok=True)
-    model_options = ["PANN", "CLAP"]
-    aug_options = ["gain", "pitch_shifting", "time_stretching"]
+    model_options = ["PANN", "CLAP", "encodec"]
+    aug_options = ["gain", "pitch_shifting", "time_stretching", "low_pass_filter"]
     config_options = [None, "narrow_config"]
     class_filters = []
     for model, aug, config in tqdm(
@@ -116,7 +120,7 @@ if __name__ == "__main__":
         try:
             args_for_augs = None
             if config:
-                with open("narrow_config.json", "r") as f:
+                with open("manifold_scripts/narrow_config.json", "r") as f:
                     args_for_augs = json.load(f)
                 convert_list_to_numpy(args_for_augs)
 
@@ -141,9 +145,13 @@ if __name__ == "__main__":
             if not embedding_path.exists():
                 print(f"Embedding file {embedding_path} does not exist, skipping.")
                 continue
-            gev_eigv, gev_eig = compute_gev(embedding_path)
+            gev_eigv, gev_eig = compute_gev(embedding_path, aug)
             np.savez(embedding_file, gev_eigv=gev_eigv, gev_eig=gev_eig)
             print(f"Saved GEV embeddings to {embedding_file}")
 
         except Exception as e:
             print(f"Error running with model={model}, aug={aug}, config={config}: {e}")
+            print(e)
+            print()
+            print()
+            print()
