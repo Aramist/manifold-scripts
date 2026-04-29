@@ -30,6 +30,25 @@ def convert_ids_to_groups(class_ids: np.ndarray) -> list[str]:
 
 
 def parse_filename(data_path: Path) -> dict[str, str | bool]:
+    if "-" in data_path.stem:
+        # New format with dashes
+        # intrinsic_dimensionality-time_stretching_local-lPCA-narrow_config-CLAP.npz
+        # intrinsic_dimensionality-{aug}_{local optional}-lPCA-{config optional}-{model}.npz
+        split = data_path.stem.split("-")
+        augmentation = split[1]
+        locality = "local" in augmentation
+        if locality:
+            augmentation = augmentation.replace("_local", "")
+        estimator = split[2]
+        config = split[3] if len(split) > 4 else "default"
+        model = split[-1]
+        return {
+            "augmentation": augmentation,
+            "is_local": locality,
+            "estimator": estimator,
+            "config": config,
+            "model": model,
+        }
     # Structure of filename:
     # intrinsic_dimensionality_{augmentation}_{local (optional)}_{estimator}_{config (optional)}_{model}.npz
     name_split = data_path.stem.split("_")[
@@ -336,19 +355,25 @@ if __name__ == "__main__":
     )  # Create subdirectory for class-wise plots
     all_data = list(id_estimate_dir.glob("intrinsic_dimensionality_*.npz"))
 
-    model_options = ["PANN", "CLAP"]
+    is_local_options = [True, False]
+    model_options = ["PANN", "CLAP", "encodec"]
+    # model_options = ["encodec"]
     aug_options = ["gain", "pitch_shifting", "time_stretching"]
-    id_options = ["lPCA", "local_lPCA"]
+    id_options = ["lPCA"]
     config_options = [None, "narrow_config"]
 
-    for model, aug, id_estimator, config in product(
-        model_options, aug_options, id_options, config_options
+    for model, aug, id_estimator, config, is_local in product(
+        model_options, aug_options, id_options, config_options, is_local_options
     ):
-        # intrinsic_dimensionality_time_stretching_local_lPCA_narrow_config_CLAP.npz
+        local_part = "_local" if is_local else ""
+        cfg_part = f"_{config}" if config is not None else ""
         id_data_path = (
             id_estimate_dir
-            / f"intrinsic_dimensionality_{aug}_{id_estimator}{'_' + config if config is not None else ''}_{model}.npz"
+            / f"intrinsic_dimensionality-{aug}{local_part}-{id_estimator}{cfg_part}-{model}.npz"
         )
+        if not id_data_path.exists():
+            print(f"Warning: No ID estimate found for {id_data_path.stem}")
+            continue
         embedding_path = (
             embedding_dir
             / f"BSD10k_{model}_{aug}{'_' + config if config is not None else ''}.h5"
@@ -356,7 +381,12 @@ if __name__ == "__main__":
         if not embedding_path.exists():
             print(f"Warning: No embedding found for {embedding_path.stem}")
             embedding_path = None
-        make_plot(id_data_path, embedding_path=embedding_path)
+
+        try:
+            make_plot(id_data_path, embedding_path=embedding_path)
+        except Exception as e:
+            print(f"Error processing {id_data_path.stem}: {e}")
+
     exit()
     # Make local vs global comparison plots
     local_paths = [p for p in all_data if "local" in p.stem]
@@ -376,16 +406,16 @@ if __name__ == "__main__":
             print()
 
     # Make PANN vs CLAP comparison plots
-    pann_paths = [p for p in all_data if "PANN" in p.stem]
-    for pann_path in tqdm(pann_paths):
-        params = parse_filename(pann_path)
-        estimator = params["estimator"] if params["estimator"] != "PCA" else "lPCA"
-        config = "_" + params["config"] if params["config"] != "default" else ""
-        clap_path = (
-            id_estimate_dir
-            / f"intrinsic_dimensionality_{params['augmentation']}_{'local_' if params['is_local'] else ''}{estimator}{config}_CLAP.npz"
-        )
-        if clap_path.exists():
-            pann_vs_clap_sidebyside(pann_path, clap_path)
-        else:
-            print(f"Warning: No CLAP counterpart found for {pann_path.stem}")
+    # pann_paths = [p for p in all_data if "PANN" in p.stem]
+    # for pann_path in tqdm(pann_paths):
+    #     params = parse_filename(pann_path)
+    #     estimator = params["estimator"] if params["estimator"] != "PCA" else "lPCA"
+    #     config = "_" + params["config"] if params["config"] != "default" else ""
+    #     clap_path = (
+    #         id_estimate_dir
+    #         / f"intrinsic_dimensionality_{params['augmentation']}_{'local_' if params['is_local'] else ''}{estimator}{config}_CLAP.npz"
+    #     )
+    #     if clap_path.exists():
+    #         pann_vs_clap_sidebyside(pann_path, clap_path)
+    #     else:
+    #         print(f"Warning: No CLAP counterpart found for {pann_path.stem}")

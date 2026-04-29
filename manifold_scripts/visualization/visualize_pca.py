@@ -14,7 +14,7 @@ from ..consts import (
     pca_embedding_dir,
 )
 
-exit()
+sns.set_theme("talk")
 
 
 def visualize_pca(
@@ -27,6 +27,7 @@ def visualize_pca(
     data = np.load(pca_file)
     pcs = data["pcs"]  # (n_samples * n_augs, n_components)
     n_augs = 101
+
     if center:
         pcs = pcs.reshape(-1, n_augs, pcs.shape[1])
         center_item = pcs[:, n_augs // 2, :][:, None, :]
@@ -40,7 +41,7 @@ def visualize_pca(
     df = pd.DataFrame(pcs, columns=[f"PC{i+1}" for i in range(pcs.shape[1])])
     df["Augmentation Strength"] = aug_strength
     # Plot the first two principal components
-    plt.figure(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(8, 6))
     sns.scatterplot(
         data=df,
         x="PC1",
@@ -48,13 +49,20 @@ def visualize_pca(
         alpha=0.5,
         hue="Augmentation Strength",
         palette="Spectral",
+        ax=ax,
+        size=1,
     )
-    plt.title(title)
-    plt.xlabel("Principal Component 1")
-    plt.ylabel("Principal Component 2")
-    plt.grid()
+    ax.set_title(title)
+    ax.set_xlabel("Principal Component 1")
+    ax.set_ylabel("Principal Component 2")
+    # Delete ticks
+    ax.set_xticks([])
+    ax.set_yticks([])
+    # Remove the frame
+    ax.grid()
+    fig.tight_layout()
     plt.savefig(save_path)
-    plt.clf()
+    plt.close()
 
 
 def visualize_pca_subset(
@@ -89,13 +97,26 @@ def visualize_pca_subset(
         df = pd.DataFrame(one_sample, columns=[f"PC{i+1}" for i in range(pcs.shape[1])])
         df["Augmentation Strength"] = aug_strength
         # Plot the first two principal components
-        plt.figure(figsize=(8, 6))
-        ax = sns.scatterplot(
+        fig, ax = plt.subplots(figsize=(8, 6))
+        if id_estimate_path and id_estimate_path.exists():
+            sample_id_chart = id_chart[:, rand_idx]  # (num_perturbation_strengths,))
+            inset_ax = ax.inset_axes([0.65, 0.65, 0.3, 0.3])
+            sns.lineplot(
+                x=np.arange(len(sample_id_chart)) + 5,
+                y=sample_id_chart,
+                ax=inset_ax,
+            )
+            inset_ax.set_title("ID Estimate")
+            inset_ax.set_xlabel("Dist from center")
+            inset_ax.set_ylabel("Estimated ID")
+
+        sns.scatterplot(
             data=df,
             x="PC1",
             y="PC2",
             hue="Augmentation Strength",
             palette="Spectral",
+            ax=ax,
         )
         # Plot a special marker for the original (unaugmented) sample
         orig_idx = n_augs // 2
@@ -113,23 +134,13 @@ def visualize_pca_subset(
             color="gray",
             alpha=0.5,
         )
-        if id_estimate_path and id_estimate_path.exists():
-            sample_id_chart = id_chart[:, rand_idx]  # (num_perturbation_strengths,))
-            inset_ax = plt.gca().inset_axes([0.65, 0.65, 0.3, 0.3])
-            sns.lineplot(
-                x=np.arange(len(sample_id_chart)) + 5,
-                y=sample_id_chart,
-                ax=inset_ax,
-            )
-            inset_ax.set_title("ID Estimate")
-            inset_ax.set_xlabel("Dist from center")
-            inset_ax.set_ylabel("Estimated ID")
-        plt.title(title + f" Index {rand_idx}")
-        plt.xlabel("Principal Component 1")
-        plt.ylabel("Principal Component 2")
-        plt.grid()
+        ax.set_title(title + f" Index {rand_idx}")
+        ax.set_xlabel("Principal Component 1")
+        ax.set_ylabel("Principal Component 2")
+        ax.grid()
         save_path = save_dir / f"{n+1}.png"
-        plt.savefig(save_path)
+        fig.tight_layout()
+        fig.savefig(save_path)
         plt.close()
 
 
@@ -138,7 +149,7 @@ if __name__ == "__main__":
     plot_dir = Path("/Users/aramis/Desktop/marl_keynotes/2026-03-04_figs/pca_plots")
     (plot_dir / "uncentered").mkdir(exist_ok=True)
     (plot_dir / "centered").mkdir(exist_ok=True)
-    model_options = ["PANN", "CLAP"]
+    model_options = ["CLAP", "PANN", "encodec"]
     aug_options = ["gain", "pitch_shifting", "time_stretching"]
     config_options = [None, "narrow_config"]
     for model, aug, config in product(model_options, aug_options, config_options):
@@ -167,13 +178,13 @@ if __name__ == "__main__":
             #     center=False,
             #     augmentation_range=aug_range,
             # )
-            # visualize_pca(
-            #     pca_embedding_path,
-            #     plot_dir / "centered" / filename,
-            #     title + " (Centered)",
-            #     center=True,
-            #     augmentation_range=aug_range,
-            # )
+            visualize_pca(
+                pca_embedding_path,
+                plot_dir / "centered" / filename,
+                title + " (Centered)",
+                center=True,
+                augmentation_range=aug_range,
+            )
             (plot_dir / "uncentered" / f"{model}_{aug}{cfg_part}_subset").mkdir(
                 exist_ok=True, parents=True
             )
